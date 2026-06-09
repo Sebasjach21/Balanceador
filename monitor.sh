@@ -17,8 +17,8 @@ send_sms() {
     fi
     curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
     --data-urlencode "Body=$msg" \
-    --data-urlencode "From=$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "To=$DESTINATION_PHONE_NUMBER" \
+    --data-urlencode "From=whatsapp:$TWILIO_PHONE_NUMBER" \
+    --data-urlencode "To=whatsapp:$DESTINATION_PHONE_NUMBER" \
     -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" > /dev/null 2>&1
     echo "SMS Enviado: $msg"
 }
