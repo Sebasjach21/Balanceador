@@ -4,54 +4,55 @@ import os
 
 app = Flask(__name__)
 
-# URLs de tus APIs
 API_PRINCIPAL = "https://techstore-api-1-5grr.onrender.com"
 API_BACKUP = "https://proyectoad2.onrender.com"
-
-# Tiempo de espera para health check (segundos)
 HEALTH_TIMEOUT = 5
 
 def is_api_alive(url):
-    """Verifica si la API responde con JSON válido (contiene 'success' o 'data')"""
     try:
         resp = requests.get(f"{url}/productos", timeout=HEALTH_TIMEOUT)
-        # Si la respuesta contiene 'success' o 'data' y no es HTML de suspensión
-        if resp.status_code == 200 and "application/json" in resp.headers.get("Content-Type", ""):
+        # Verifica que la respuesta sea JSON y contenga los datos esperados
+        if resp.status_code == 200 and 'application/json' in resp.headers.get('Content-Type', ''):
             return True
         return False
     except:
         return False
 
 @app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
 def proxy(path):
-    # Verificar estado de la API principal
+    # Seleccionar API objetivo
     if is_api_alive(API_PRINCIPAL):
         target = API_PRINCIPAL
     else:
         target = API_BACKUP
-        print("⚠️ API principal caída, usando backup")
+        print(f"⚠️ Usando backup: {target}")
 
-    # Reenviar la petición al target elegido
+    # Construir URL completa
     url = f"{target}/{path}"
-    method = request.method
+    
+    # Reenviar la petición tal cual, excepto la cabecera Host
     headers = {key: value for key, value in request.headers if key.lower() != 'host'}
+    
     try:
         resp = requests.request(
-            method=method,
+            method=request.method,
             url=url,
             headers=headers,
             params=request.args,
             data=request.get_data(),
             cookies=request.cookies,
-            timeout=30
+            timeout=30,
+            allow_redirects=False
         )
-        # Excluir cabeceras que causan problemas
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        response_headers = [(name, value) for name, value in resp.raw.headers.items() if name.lower() not in excluded_headers]
-        return Response(resp.content, resp.status_code, response_headers)
-    except Exception as e:
-        return Response(f"Error en el balanceador: {e}", 500)
+        # Preparar las cabeceras de respuesta (copiando todas excepto algunas problemáticas)
+        response_headers = [(name, value) for name, value in resp.raw.headers.items()
+                            if name.lower() not in ('content-encoding', 'transfer-encoding')]
+        # Crear respuesta con el contenido original y su código de estado
+        return Response(resp.content, status=resp.status_code, headers=response_headers)
+    except requests.exceptions.RequestException as e:
+        return Response(f"Error en el balanceador: {str(e)}", status=500)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
