@@ -11,7 +11,6 @@ HEALTH_TIMEOUT = 5
 def is_api_alive(url):
     try:
         resp = requests.get(f"{url}/productos", timeout=HEALTH_TIMEOUT)
-        # Verifica que la respuesta sea JSON y contenga los datos esperados
         if resp.status_code == 200 and 'application/json' in resp.headers.get('Content-Type', ''):
             return True
         return False
@@ -21,20 +20,18 @@ def is_api_alive(url):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
 def proxy(path):
-    # Seleccionar API objetivo
     if is_api_alive(API_PRINCIPAL):
         target = API_PRINCIPAL
+        print("Usando API principal")
     else:
         target = API_BACKUP
-        print(f"⚠️ Usando backup: {target}")
+        print("⚠️ Usando backup")
 
-    # Construir URL completa
     url = f"{target}/{path}"
-    
-    # Reenviar la petición tal cual, excepto la cabecera Host
-    headers = {key: value for key, value in request.headers if key.lower() != 'host'}
+    headers = {k: v for k, v in request.headers if k.lower() != 'host'}
     
     try:
+        # Reenviar la petición sin descomprimir automáticamente para evitar problemas
         resp = requests.request(
             method=request.method,
             url=url,
@@ -45,12 +42,15 @@ def proxy(path):
             timeout=30,
             allow_redirects=False
         )
-        # Preparar las cabeceras de respuesta (copiando todas excepto algunas problemáticas)
-        response_headers = [(name, value) for name, value in resp.raw.headers.items()
-                            if name.lower() not in ('content-encoding', 'transfer-encoding')]
-        # Crear respuesta con el contenido original y su código de estado
+        # Construir cabeceras de respuesta, excluyendo las que causan problemas
+        excluded = ['content-encoding', 'transfer-encoding', 'content-length']
+        response_headers = [(name, value) for name, value in resp.raw.headers.items() 
+                            if name.lower() not in excluded]
+        # Forzar Content-Type a application/json si la respuesta es JSON (para evitar símbolos raros)
+        if 'application/json' in resp.headers.get('Content-Type', ''):
+            response_headers.append(('Content-Type', 'application/json; charset=utf-8'))
         return Response(resp.content, status=resp.status_code, headers=response_headers)
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         return Response(f"Error en el balanceador: {str(e)}", status=500)
 
 if __name__ == '__main__':
