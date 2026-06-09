@@ -11,15 +11,15 @@ RESPALDO_UP=true
 
 send_sms() {
     local msg="$1"
-    if [ -z "$TWILIO_ACCOUNT_SID" ] || [ -z "$TWILIO_AUTH_TOKEN" ] || [ -z "$TWILIO_PHONE_NUMBER" ] || [ -z "$DESTINATION_PHONE_NUMBER" ]; then
+    if [ -z "$TWILIO_SID" ] || [ -z "$TWILIO_TOKEN" ] || [ -z "$TWILIO_PHONE" ] || [ -z "$DESTINATION_PHONE" ]; then
         echo "Faltan credenciales de Twilio. No se envia SMS."
         return
     fi
-    curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
+    curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_SID/Messages.json" \
     --data-urlencode "Body=$msg" \
-    --data-urlencode "From=whatsapp:$TWILIO_PHONE_NUMBER" \
-    --data-urlencode "To=whatsapp:$DESTINATION_PHONE_NUMBER" \
-    -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" > /dev/null 2>&1
+    --data-urlencode "From=whatsapp:$TWILIO_PHONE" \
+    --data-urlencode "To=whatsapp:$DESTINATION_PHONE" \
+    -u "$TWILIO_SID:$TWILIO_TOKEN" > /dev/null 2>&1
     echo "SMS Enviado: $msg"
 }
 
