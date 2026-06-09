@@ -11,6 +11,7 @@ HEALTH_TIMEOUT = 5
 def is_api_alive(url):
     try:
         resp = requests.get(f"{url}/productos", timeout=HEALTH_TIMEOUT)
+        # Considera viva si es JSON y no tiene la palabra "suspended"
         if resp.status_code == 200 and 'application/json' in resp.headers.get('Content-Type', ''):
             return True
         return False
@@ -20,18 +21,25 @@ def is_api_alive(url):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
 def proxy(path):
+    # Decidir target
     if is_api_alive(API_PRINCIPAL):
         target = API_PRINCIPAL
-        print("Usando API principal")
     else:
         target = API_BACKUP
-        print("⚠️ Usando backup")
+        print(f"⚠️ Usando backup: {target}")
 
+    # Construir URL completa
     url = f"{target}/{path}"
-    headers = {k: v for k, v in request.headers if k.lower() != 'host'}
+    
+    # Copiar cabeceras omitiendo 'host' y otras problemáticas
+    headers = {}
+    for key, value in request.headers:
+        if key.lower() in ('host', 'content-length', 'connection'):
+            continue
+        headers[key] = value
     
     try:
-        # Reenviar la petición sin descomprimir automáticamente para evitar problemas
+        # Reenviar la petición con los mismos parámetros, datos, etc.
         resp = requests.request(
             method=request.method,
             url=url,
@@ -39,16 +47,12 @@ def proxy(path):
             params=request.args,
             data=request.get_data(),
             cookies=request.cookies,
-            timeout=30,
-            allow_redirects=False
+            timeout=30
         )
-        # Construir cabeceras de respuesta, excluyendo las que causan problemas
-        excluded = ['content-encoding', 'transfer-encoding', 'content-length']
-        response_headers = [(name, value) for name, value in resp.raw.headers.items() 
-                            if name.lower() not in excluded]
-        # Forzar Content-Type a application/json si la respuesta es JSON (para evitar símbolos raros)
-        if 'application/json' in resp.headers.get('Content-Type', ''):
-            response_headers.append(('Content-Type', 'application/json; charset=utf-8'))
+        # Construir respuesta de Flask copiando TODAS las cabeceras de la respuesta original
+        response_headers = [(name, value) for name, value in resp.headers.items()
+                            if name.lower() not in ('content-encoding', 'transfer-encoding', 'content-length')]
+        # Devolver el contenido tal cual, con el código de estado y cabeceras
         return Response(resp.content, status=resp.status_code, headers=response_headers)
     except Exception as e:
         return Response(f"Error en el balanceador: {str(e)}", status=500)
