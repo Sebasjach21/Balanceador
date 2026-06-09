@@ -1,3 +1,3 @@
-FROM nginx:latest
-COPY nginx.conf /etc/nginx/nginx.conf
+FROM haproxy:latest
+COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
 EXPOSE 80
